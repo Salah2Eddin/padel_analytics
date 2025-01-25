@@ -219,6 +219,7 @@ class PlayerKeypointsTracker(Tracker):
         save_path: path to save serializable tracker results
     """
 
+    # YOLO parameters
     CONF = 0.25
     IOU = 0.7
 

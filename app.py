@@ -18,7 +18,7 @@ from trackers import (
     KeypointsTracker,
     TrackingRunner
 )
-from analytics import DataAnalytics
+from analytics import PlayerAnalytics
 from visualizations.padel_court import padel_court_2d
 from estimate_velocity import BallVelocityEstimator, ImpactType
 from utils.video import save_video

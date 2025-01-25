@@ -14,7 +14,7 @@ from trackers.players_tracker.players_tracker import Players
 from trackers.ball_tracker.ball_tracker import Ball
 from trackers.keypoints_tracker.keypoints_tracker import Keypoints
 from trackers.tracker import Tracker
-from analytics import ProjectedCourt, DataAnalytics
+from analytics import ProjectedCourt, PlayerAnalytics
 
 
 class TrackingRunner:
@@ -74,7 +74,7 @@ class TrackingRunner:
         self.projected_court = ProjectedCourt(self.video_info)
         if collect_data:
             print("runner: Ready for data collection")
-            self.data_analytics = DataAnalytics()
+            self.data_analytics = PlayerAnalytics()
         else:
             self.data_analytics = None
     

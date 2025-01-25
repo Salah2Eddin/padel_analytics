@@ -5,6 +5,7 @@ import pandas as pd
 import numpy as np
 import functools
 
+from .import SIZE_MULTIPLIER, COURT_SIZE_M
 
 class InvalidDataPoint(Exception):
     pass
@@ -29,7 +30,7 @@ class PlayerPosition:
         return f"player{self.id}"
 
 @dataclass
-class DataPoint:
+class FramePlayersData:
 
     """
     Tracker objects data collected in a given frame
@@ -84,7 +85,7 @@ class DataPoint:
         print("data_analytics: impossible to sort, missing players position")
         return None
 
-class DataAnalytics:
+class PlayerAnalytics:
 
     """
     Tracker objects data collector 
@@ -92,8 +93,8 @@ class DataAnalytics:
 
     def __init__(self):
         self.frames = [0]
-        self.current_datapoint = DataPoint(frame=self.frames[-1])
-        self.datapoints: list[DataPoint] = []
+        self.current_datapoint = FramePlayersData(frame=self.frames[-1])
+        self.datapoints: list[FramePlayersData] = []
 
     def restart(self) -> None:
         self.__init__()
@@ -127,7 +128,7 @@ class DataAnalytics:
                 )
 
             datapoints.append(
-                DataPoint(
+                FramePlayersData(
                     frame=frame, 
                     players_position=players_position if players_position else None,
                 )
@@ -182,7 +183,7 @@ class DataAnalytics:
     def update(self):
         self.current_datapoint.validate()
         self.datapoints.append(self.current_datapoint)
-        self.current_datapoint = DataPoint(frame=self.frames[-1])
+        self.current_datapoint = FramePlayersData(frame=self.frames[-1])
     
     def step(self, x: int = 1) -> None:
         new_frame = self.frames[-1] + 1
@@ -210,94 +211,104 @@ class DataAnalytics:
         """
 
         def norm(x: float, y: float) -> float:
-            return np.sqrt(x**2 + y**2)
+            return np.sqrt(x*x + y*y)
 
         def calculate_distance(row, player_id: int):
             return norm(
-                row[f"player{player_id}_deltax1"], 
-                row[f"player{player_id}_deltay1"], 
+                row[f"player{player_id}_deltax"], 
+                row[f"player{player_id}_deltay"], 
             )
         
-        def calculate_norm_velocity(row, player_id: int, frame_interval: int) -> float:
+        def calculate_norm_velocity(row, player_id: int) -> float:
             return norm(
-                row[f"player{player_id}_Vx{frame_interval}"],
-                row[f"player{player_id}_Vy{frame_interval}"],
+                row[f"player{player_id}_Vx"],
+                row[f"player{player_id}_Vy"],
             )
 
-        def calculate_norm_acceleration(row, player_id: int, frame_interval: int) -> float:
+        def calculate_norm_acceleration(row, player_id: int) -> float:
             return norm(
-                row[f"player{player_id}_Ax{frame_interval}"],
-                row[f"player{player_id}_Ay{frame_interval}"],
+                row[f"player{player_id}_Ax"],
+                row[f"player{player_id}_Ay"],
             )
 
-        frame_intervals = (1, 2, 3, 4)
         player_ids = (1, 2, 3, 4)
 
         df = pd.DataFrame(self.into_dict())
         df["time"] = df["frame"] * (1/fps)
 
-        for frame_interval in frame_intervals:
-            # Time in seconds between each frame for a given frame interval
-            df[f"delta_time{frame_interval}"] = df["time"].diff(frame_interval)
-            for player_id in player_ids:
-                for pos in ("x", "y"):
+        # Time in seconds between each frame for a given frame interval
+        df[f"delta_time"] = df["time"].diff()
+
+        for player_id in player_ids:
+            for pos in ("x", "y"):
+                    # # Place relative to court in M
+                    # sizeIndex = 0 if pos == "x" else 1
+                    # df[
+                    #     f"player{player_id}_{pos}Relative"
+                    # ] = df[f"player{player_id}_{pos}"]*COURT_SIZE_M[sizeIndex]/(SIZE_MULTIPLIER[sizeIndex]*vSize[sizeIndex])
+
                     # Displacement in x and y for each of the players 
                     # for a given time interval
+                    # df[
+                    #     f"player{player_id}_delta{pos}"
+                    # ] = df[f"player{player_id}_{pos}Relative"].diff()
+
+                    # Displacement in x and y for each of the players 
                     df[
-                        f"player{player_id}_delta{pos}{frame_interval}"
-                    ] = df[f"player{player_id}_{pos}"].diff(frame_interval)
+                        f"player{player_id}_delta{pos}"
+                    ] = df[f"player{player_id}_{pos}"].diff()
 
                     # Velocity in x and y for each of the players 
                     # for a given time interval
                     eval_string_velocity = f"""
-                    player{player_id}_delta{pos}{frame_interval} / delta_time{frame_interval}
+                    player{player_id}_delta{pos} / delta_time
                     """
-                    df[f"player{player_id}_V{pos}{frame_interval}"] = df.eval(
+                    df[f"player{player_id}_V{pos}"] = df.eval(
                         eval_string_velocity,
                     )
 
                     # Velocity difference in x and y for each of the players 
                     # for a given time interval
                     df[
-                        f"player{player_id}_deltaV{pos}{frame_interval}"
-                    ] = df[f"player{player_id}_V{pos}{frame_interval}"].diff(frame_interval)
+                        f"player{player_id}_deltaV{pos}"
+                    ] = df[f"player{player_id}_V{pos}"].diff()
 
                     # Acceleration in x and y for each of the players
                     # for a given time interval
                     eval_string_acceleration = f"""
-                    player{player_id}_deltaV{pos}{frame_interval} / delta_time{frame_interval}
+                    player{player_id}_deltaV{pos} / delta_time
                     """
-                    df[f"player{player_id}_A{pos}{frame_interval}"] = df.eval(
+                    df[f"player{player_id}_A{pos}"] = df.eval(
                         eval_string_acceleration,
                     )
-                
-                # Calculate player distance in between frames
-                df[f"player{player_id}_distance"] = df.apply(
-                    functools.partial(calculate_distance, player_id=player_id),
-                    axis=1,
-                )
+            
+            # Calculate player distance in between frames
+            df[f"player{player_id}_distance"] = df.apply(
+                functools.partial(calculate_distance, player_id=player_id),
+                axis=1,
+            )
 
-                # Calculate norm velocity for each of the players
-                # for a given time interval
-                df[f"player{player_id}_Vnorm{frame_interval}"] = df.apply(
-                    functools.partial(
-                        calculate_norm_velocity, 
-                        player_id=player_id,
-                        frame_interval=frame_interval,
-                    ),
-                    axis=1,
-                )
+            df[f"player{player_id}_total_distance"] = df[f"player{player_id}_distance"].cumsum()
 
-                # Calculate norm acceleration for each of the players
-                # for a given time interval
-                df[f"player{player_id}_Anorm{frame_interval}"] = df.apply(
-                    functools.partial(
-                        calculate_norm_acceleration, 
-                        player_id=player_id,
-                        frame_interval=frame_interval,
-                    ),
-                    axis=1,
-                )
+            # Calculate norm velocity for each of the players
+            # for a given time interval
+            df[f"player{player_id}_Vnorm"] = df.apply(
+                functools.partial(
+                    calculate_norm_velocity, 
+                    player_id=player_id
+                ),
+                axis=1,
+            )
+
+            # Calculate norm acceleration for each of the players
+            # for a given time interval
+            df[f"player{player_id}_Anorm"] = df.apply(
+                functools.partial(
+                    calculate_norm_acceleration, 
+                    player_id=player_id
+                ),
+                axis=1,
+            )
         
         return df
 

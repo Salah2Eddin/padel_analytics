@@ -70,10 +70,10 @@ if __name__ == "__main__":
     )
 
     first_frame_generator = sv.get_video_frames_generator(
-        INPUT_VIDEO_PATH,
-        start=0,
-        stride=1,
-        end=1,
+       INPUT_VIDEO_PATH,
+       start=0,
+       stride=1,
+       end=1,
     )
 
     img = next(first_frame_generator)

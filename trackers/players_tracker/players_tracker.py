@@ -276,6 +276,7 @@ class PlayerTracker(Tracker):
         save_path: path to save serializable tracker results
     """
 
+    # YOLO parameters
     CONF = 0.5
     IOU = 0.7
     IMGSZ = 640

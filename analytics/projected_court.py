@@ -7,8 +7,9 @@ import supervision as sv
 from constants import BASE_LINE, SIDE_LINE, SERVICE_SIDE_LINE, NET_SIDE_LINE
 from utils import convert_meters_to_pixel_distance, convert_pixel_distance_to_meters
 from trackers import Player, Players, Keypoint, Keypoints, Ball
-from analytics.data_analytics import DataAnalytics
+from analytics.data_analytics import PlayerAnalytics
 
+from .import SIZE_MULTIPLIER
 
 class InconsistentPredictedKeypoints(Exception):
     pass
@@ -208,8 +209,6 @@ class ProjectedCourt:
         video_info: video information of interest
     """
 
-    WIDTH_MULTIPLIER = 0.14
-    HEIGHT_MULTIPLIER = 0.47
     BUFFER = 50
     PADDING = 20
     ALPHA = 0.5
@@ -217,8 +216,8 @@ class ProjectedCourt:
     def __init__(self, video_info: sv.VideoInfo):
         self.video_info = video_info
         # Canvas background points in pixels
-        self.WIDTH = int(self.WIDTH_MULTIPLIER*video_info.width)
-        self.HEIGHT = int(self.HEIGHT_MULTIPLIER*video_info.height)
+        self.WIDTH = int(SIZE_MULTIPLIER[0]*video_info.width)
+        self.HEIGHT = int(SIZE_MULTIPLIER[1]*video_info.height)
 
         self._set_canvas_background_position()
         self._set_projected_court_position()
@@ -543,7 +542,7 @@ class ProjectedCourt:
         frame: np.ndarray,
         player_detection: Player,
         homography_matrix: np.ndarray,
-        data_analytics: DataAnalytics = None,
+        data_analytics: PlayerAnalytics = None,
     ) -> np.ndarray:
         """
         Project and draw a single player
@@ -571,7 +570,7 @@ class ProjectedCourt:
         frame: np.ndarray,
         players_detection: list[Player],
         homography_matrix: np.ndarray,
-        data_analytics: DataAnalytics = None,  
+        data_analytics: PlayerAnalytics = None,  
     ) -> np.ndarray:
         """
         Project and draw players
@@ -611,9 +610,9 @@ class ProjectedCourt:
         keypoints_detection: Keypoints,
         players_detection: Optional[Players],
         ball_detection: Optional[Ball],
-        data_analytics: Optional[DataAnalytics] = None,
+        data_analytics: Optional[PlayerAnalytics] = None,
         is_fixed_keypoints: bool = False,
-    ) -> tuple[np.ndarray, DataAnalytics]:
+    ) -> tuple[np.ndarray, PlayerAnalytics]:
         """
         Project and draw court and objects of interest.
         Collect objects of interest data.
