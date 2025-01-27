@@ -95,13 +95,9 @@ class ProjectedCourtKeypoints:
         """
         Get the reference origin to estimate relative positions in meters
         """
-        delta_xy = (
-            int((self.k7[0] - self.k6[0]) / 2), 
-            int((self.k7[1] - self.k6[1]) / 2),
-        )
         origin = (
-            self.k6[0] + delta_xy[0], 
-            self.k6[1] + delta_xy[1],
+            (self.k7[0] + self.k6[0]) // 2,
+            (self.k7[1] + self.k6[1]) // 2,
         )
 
         return origin
