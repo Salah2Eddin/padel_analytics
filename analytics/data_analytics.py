@@ -5,96 +5,125 @@ import pandas as pd
 import numpy as np
 import functools
 
-from .import SIZE_MULTIPLIER, COURT_SIZE_M
+from . import SIZE_MULTIPLIER, COURT_SIZE_M
+
 
 class InvalidDataPoint(Exception):
     pass
 
 
+# TODO: print to log file
+
 @dataclass
-class PlayerPosition:
-
+class Position:
     """
-    Player position (meters) in a given frame
+        Position (meters) in a given frame
     """
-
-    id: int
     position: tuple[float, float]
 
     def __post_init__(self):
         assert isinstance(self.position[0], float)
         assert isinstance(self.position[1], float)
 
+
+@dataclass
+class PlayerPosition(Position):
+    """
+    Player position (meters) in a given frame
+    """
+    id: int
+
     @property
     def key(self) -> str:
         return f"player{self.id}"
 
-@dataclass
-class FramePlayersData:
 
+@dataclass
+class BallPosition(Position):
+    """
+    Ball position (meters) in a given frame
+    """
+
+    @property
+    def key(self) -> str:
+        return f"Ball"
+
+
+@dataclass
+class FrameData:
     """
     Tracker objects data collected in a given frame
 
     Attributes: 
         frame: frame of interest
-        players_position: players position (meters) in the given frame
+        players_positions: players positions (meters) in the given frame
+        ball_position: ball position (meters) in the given frame
     """
 
     frame: int = None
-    players_position: list[PlayerPosition] = None
+    players_positions: list[PlayerPosition] = None
+    ball_position: BallPosition = None
 
     def validate(self) -> None:
-
         if self.frame is None:
             raise InvalidDataPoint("Unknown frame")
-        
-        if self.players_position is None:
+
+        # Players positions validation
+        if self.players_positions is None:
             print("data_analytics: WARNING(Missing players position)")
             return None
-        
+
         players_ids = []
-        for i, player_pos in enumerate(deepcopy(self.players_position)):
+        for i, player_pos in enumerate(deepcopy(self.players_positions)):
             player_id = player_pos.id
 
             if player_id in (1, 2, 3, 4):
                 players_ids.append(player_id)
             else:
-                del self.players_position[i]
+                del self.players_positions[i]
 
         if len(players_ids) != len(set(players_ids)):
-            raise InvalidDataPoint("N-plicate player id")
-        
-        if len(self.players_position) != 4:
-            number_players_missing = 4 - len(self.players_position)
-            print(f"{number_players_missing} player/s missing")
-        
-    def add_player_position(self, player_position: PlayerPosition):
-        if self.players_position is None:
-            self.players_position = [player_position]
-        else:
-            self.players_position.append(player_position)
+            raise InvalidDataPoint("Duplicate player id")
 
-    def sort_players_position(self) -> Optional[list[PlayerPosition]]:
-        if self.players_position:
+        if len(self.players_positions) != 4:
+            number_players_missing = 4 - len(self.players_positions)
+            print(f"{number_players_missing} player/s missing")
+
+        # Ball position validation
+        if self.ball_position is None:
+            print(f"ball is missing")
+
+    def add_player_position(self, player_position: PlayerPosition):
+        if self.players_positions is None:
+            self.players_positions = [player_position]
+        else:
+            self.players_positions.append(player_position)
+
+    # TODO: check if necessary
+    def sort_players_positions(self) -> Optional[list[PlayerPosition]]:
+        if self.players_positions:
             players_position = sorted(
-                self.players_position, 
+                self.players_positions,
                 key=lambda x: x.id,
             )
             return players_position
-        
+
         print("data_analytics: impossible to sort, missing players position")
         return None
 
-class PlayerAnalytics:
+    def set_ball_position(self, ball_position: BallPosition):
+        self.ball_position = ball_position
 
+
+class PlayerAnalytics:
     """
     Tracker objects data collector 
     """
 
     def __init__(self):
         self.frames = [0]
-        self.current_datapoint = FramePlayersData(frame=self.frames[-1])
-        self.datapoints: list[FramePlayersData] = []
+        self.frames_data: list[FrameData] = []
+        self.current_frame_data = FrameData(frame=self.frames[-1])
 
     def restart(self) -> None:
         self.__init__()
@@ -105,15 +134,15 @@ class PlayerAnalytics:
         instance = cls()
         instance.frames = frames
 
-        datapoints = []
+        frames_data = []
         for i in range(len(frames)):
             frame = frames[i]
             players_position = []
             for player_id in (1, 2, 3, 4):
                 if (
-                    data[f"player{player_id}_x"][i] is None
-                    or 
-                    data[f"player{player_id}_y"][i] is None
+                        data[f"player{player_id}_x"][i] is None
+                        or
+                        data[f"player{player_id}_y"][i] is None
                 ):
                     continue
 
@@ -124,21 +153,29 @@ class PlayerAnalytics:
                             data[f"player{player_id}_x"][i],
                             data[f"player{player_id}_y"][i],
                         )
-                    )   
+                    )
                 )
 
-            datapoints.append(
-                FramePlayersData(
-                    frame=frame, 
-                    players_position=players_position if players_position else None,
+            ball_position = BallPosition(
+                position=(
+                    data[f"ball_x"],
+                    data[f"ball_y"]
                 )
             )
-        
-        instance.datapoints = datapoints
-        instance.current_datapoint = None
+
+            frames_data.append(
+                FrameData(
+                    frame=frame,
+                    players_positions=players_position if players_position else None,
+                    ball_position=ball_position,
+                )
+            )
+
+        instance.frames_data = frames_data
+        instance.current_frame_data = None
 
         return instance
-    
+
     def into_dict(self) -> dict[str, list]:
         data = {
             "frame": [],
@@ -150,41 +187,53 @@ class PlayerAnalytics:
             "player3_y": [],
             "player4_x": [],
             "player4_y": [],
+            "ball_x": [],
+            "ball_y": [],
         }
 
-        for datapoint in self.datapoints:
-            data["frame"].append(datapoint.frame)
+        for frame_data in self.frames_data:
+            data["frame"].append(frame_data.frame)
             number_frames = len(data["frame"])
 
-            players_position = datapoint.sort_players_position()
-            if players_position:
-                for player_position in players_position:
+            players_positions = frame_data.sort_players_positions()
+            if players_positions:
+                for player_position in players_positions:
                     data[f"{player_position.key}_x"].append(
-                        player_position.position[0] 
+                        player_position.position[0]
                     )
                     data[f"{player_position.key}_y"].append(
-                        player_position.position[1] 
+                        player_position.position[1]
                     )
+
+            ball_position = frame_data.ball_position
+            if ball_position:
+                data["ball_x"].append(
+                    ball_position.position[0]
+                )
+                data["ball_y"].append(
+                    ball_position.position[1]
+                )
 
             # Append missing values
             for k, v in data.items():
                 if len(v) < number_frames:
                     data[k].append(None)
+                    # data[k].append(data[k][-1] if len(data[k]) > 0 else None)
 
         print("data_analytics: missing values")
         for k, v in data.items():
             print(f"data_analytics: {k} - {len([v for x in v if x is None])}/{len(v)}")
-  
+
         return data
 
     def __len__(self) -> int:
         return len(self.frames)
 
     def update(self):
-        self.current_datapoint.validate()
-        self.datapoints.append(self.current_datapoint)
-        self.current_datapoint = FramePlayersData(frame=self.frames[-1])
-    
+        self.current_frame_data.validate()
+        self.frames_data.append(self.current_frame_data)
+        self.current_frame_data = FrameData(frame=self.frames[-1])
+
     def step(self, x: int = 1) -> None:
         new_frame = self.frames[-1] + 1
 
@@ -194,13 +243,23 @@ class PlayerAnalytics:
         self.update()
 
     def add_player_position(
-        self, 
-        id: int, 
-        position: tuple[float, float],
+            self,
+            id: int,
+            position: tuple[float, float],
     ):
-        self.current_datapoint.add_player_position(
+        self.current_frame_data.add_player_position(
             PlayerPosition(
                 id=id,
+                position=position,
+            )
+        )
+
+    def set_ball_position(
+            self,
+            position: tuple[float, float],
+    ):
+        self.current_frame_data.set_ball_position(
+            BallPosition(
                 position=position,
             )
         )
@@ -211,14 +270,14 @@ class PlayerAnalytics:
         """
 
         def norm(x: float, y: float) -> float:
-            return np.sqrt(x*x + y*y)
+            return np.sqrt(x * x + y * y)
 
         def calculate_distance(row, player_id: int):
             return norm(
-                row[f"player{player_id}_deltax"], 
-                row[f"player{player_id}_deltay"], 
+                row[f"player{player_id}_deltax"],
+                row[f"player{player_id}_deltay"],
             )
-        
+
         def calculate_norm_velocity(row, player_id: int) -> float:
             return norm(
                 row[f"player{player_id}_Vx"],
@@ -234,67 +293,42 @@ class PlayerAnalytics:
         player_ids = (1, 2, 3, 4)
 
         df = pd.DataFrame(self.into_dict())
-        df["time"] = df["frame"] * (1/fps)
+        df["time"] = df["frame"] * (1 / fps)
 
         # Time in seconds between each frame for a given frame interval
         df[f"delta_time"] = df["time"].diff()
 
         for player_id in player_ids:
             for pos in ("x", "y"):
-                    # # Place relative to court in M
-                    # sizeIndex = 0 if pos == "x" else 1
-                    # df[
-                    #     f"player{player_id}_{pos}Relative"
-                    # ] = df[f"player{player_id}_{pos}"]*COURT_SIZE_M[sizeIndex]/(SIZE_MULTIPLIER[sizeIndex]*vSize[sizeIndex])
+                # Displacement in x and y for each of the players
+                df[f"player{player_id}_delta{pos}"] = df[f"player{player_id}_{pos}"].diff()
 
-                    # Displacement in x and y for each of the players 
-                    # for a given time interval
-                    # df[
-                    #     f"player{player_id}_delta{pos}"
-                    # ] = df[f"player{player_id}_{pos}Relative"].diff()
+                # Velocity in x and y for each of the players
+                # for a given time interval
+                df[f"player{player_id}_V{pos}"] = df[f"player{player_id}_delta{pos}"] / df["delta_time"]
 
-                    # Displacement in x and y for each of the players 
-                    df[
-                        f"player{player_id}_delta{pos}"
-                    ] = df[f"player{player_id}_{pos}"].diff()
+                # Velocity difference in x and y for each of the players
+                # for a given time interval
+                df[f"player{player_id}_deltaV{pos}"] = df[f"player{player_id}_V{pos}"].diff()
 
-                    # Velocity in x and y for each of the players 
-                    # for a given time interval
-                    eval_string_velocity = f"""
-                    player{player_id}_delta{pos} / delta_time
-                    """
-                    df[f"player{player_id}_V{pos}"] = df.eval(
-                        eval_string_velocity,
-                    )
+                # Acceleration in x and y for each of the players
+                # for a given time interval
+                df[f"player{player_id}_A{pos}"] = df[f"player{player_id}_deltaV{pos}"] / df["delta_time"]
 
-                    # Velocity difference in x and y for each of the players 
-                    # for a given time interval
-                    df[
-                        f"player{player_id}_deltaV{pos}"
-                    ] = df[f"player{player_id}_V{pos}"].diff()
-
-                    # Acceleration in x and y for each of the players
-                    # for a given time interval
-                    eval_string_acceleration = f"""
-                    player{player_id}_deltaV{pos} / delta_time
-                    """
-                    df[f"player{player_id}_A{pos}"] = df.eval(
-                        eval_string_acceleration,
-                    )
-            
             # Calculate player distance in between frames
             df[f"player{player_id}_distance"] = df.apply(
                 functools.partial(calculate_distance, player_id=player_id),
                 axis=1,
             )
 
+            # Calculate accumulative sum of distances for each player
             df[f"player{player_id}_total_distance"] = df[f"player{player_id}_distance"].cumsum()
 
             # Calculate norm velocity for each of the players
             # for a given time interval
             df[f"player{player_id}_Vnorm"] = df.apply(
                 functools.partial(
-                    calculate_norm_velocity, 
+                    calculate_norm_velocity,
                     player_id=player_id
                 ),
                 axis=1,
@@ -304,18 +338,25 @@ class PlayerAnalytics:
             # for a given time interval
             df[f"player{player_id}_Anorm"] = df.apply(
                 functools.partial(
-                    calculate_norm_acceleration, 
+                    calculate_norm_acceleration,
                     player_id=player_id
                 ),
                 axis=1,
             )
-        
+
+        for pos in ("x", "y"):
+            # Displacement in x and y for each of the ball
+            df[f"ball_delta{pos}"] = df[f"ball_{pos}"].diff()
+
+            # Velocity in x and y for each of the ball
+            # for a given time interval
+            df[f"ball_V{pos}"] = df[f"ball_delta{pos}"] / df["delta_time"]
+
+            # Velocity difference in x and y for each of the ball
+            # for a given time interval
+            df[f"ball_deltaV{pos}"] = df[f"ball_V{pos}"].diff()
+
+            # Acceleration in x and y for each of the ball
+            # for a given time interval
+            df[f"ball_A{pos}"] = df[f"ball_deltaV{pos}"] / df["delta_time"]
         return df
-
-
-        
-
-
-
-        
-    
