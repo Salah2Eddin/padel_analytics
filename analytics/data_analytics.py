@@ -269,27 +269,6 @@ class PlayerAnalytics:
         Retrieves a dataframe with additional features
         """
 
-        def norm(x: float, y: float) -> float:
-            return np.sqrt(x * x + y * y)
-
-        def calculate_distance(row, player_id: int):
-            return norm(
-                row[f"player{player_id}_deltax"],
-                row[f"player{player_id}_deltay"],
-            )
-
-        def calculate_norm_velocity(row, player_id: int) -> float:
-            return norm(
-                row[f"player{player_id}_Vx"],
-                row[f"player{player_id}_Vy"],
-            )
-
-        def calculate_norm_acceleration(row, player_id: int) -> float:
-            return norm(
-                row[f"player{player_id}_Ax"],
-                row[f"player{player_id}_Ay"],
-            )
-
         player_ids = (1, 2, 3, 4)
 
         df = pd.DataFrame(self.into_dict())
@@ -316,32 +295,21 @@ class PlayerAnalytics:
                 df[f"player{player_id}_A{pos}"] = df[f"player{player_id}_deltaV{pos}"] / df["delta_time"]
 
             # Calculate player distance in between frames
-            df[f"player{player_id}_distance"] = df.apply(
-                functools.partial(calculate_distance, player_id=player_id),
-                axis=1,
+            df[f"player{player_id}_distance"] = np.sqrt(
+                df[f"player{player_id}_deltax"] ** 2 + df[f"player{player_id}_deltay"] ** 2
             )
 
             # Calculate accumulative sum of distances for each player
             df[f"player{player_id}_total_distance"] = df[f"player{player_id}_distance"].cumsum()
 
-            # Calculate norm velocity for each of the players
-            # for a given time interval
-            df[f"player{player_id}_Vnorm"] = df.apply(
-                functools.partial(
-                    calculate_norm_velocity,
-                    player_id=player_id
-                ),
-                axis=1,
+            # Calculate norm velocity for each player for a given time interval
+            df[f"player{player_id}_Vnorm"] = np.sqrt(
+                df[f"player{player_id}_Vx"] ** 2 + df[f"player{player_id}_Vy"] ** 2
             )
 
-            # Calculate norm acceleration for each of the players
-            # for a given time interval
-            df[f"player{player_id}_Anorm"] = df.apply(
-                functools.partial(
-                    calculate_norm_acceleration,
-                    player_id=player_id
-                ),
-                axis=1,
+            # Calculate norm acceleration for each player for a given time interval
+            df[f"player{player_id}_Anorm"] = np.sqrt(
+                df[f"player{player_id}_Ax"] ** 2 + df[f"player{player_id}_Ay"] ** 2
             )
 
         for pos in ("x", "y"):
@@ -359,4 +327,22 @@ class PlayerAnalytics:
             # Acceleration in x and y for each of the ball
             # for a given time interval
             df[f"ball_A{pos}"] = df[f"ball_deltaV{pos}"] / df["delta_time"]
+
+        # Calculate ball distance in between frames
+        df[f"ball_distance"] = np.sqrt(
+            df[f"ball_deltax"] ** 2 + df[f"ball_deltay"] ** 2
+        )
+
+        # Calculate accumulative sum of distances for each player
+        df[f"ball_total_distance"] = df[f"ball_distance"].cumsum()
+
+        # Calculate norm velocity for the ball for a given time interval
+        df[f"ball_Vnorm"] = np.sqrt(
+            df[f"ball_Vx"] ** 2 + df[f"ball_Vy"] ** 2
+        )
+
+        # Calculate norm acceleration for the ball for a given time interval
+        df[f"ball_Anorm"] = np.sqrt(
+            df[f"ball_Ax"] ** 2 + df[f"ball_Ay"] ** 2
+        )
         return df

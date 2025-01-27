@@ -584,21 +584,31 @@ class ProjectedCourt:
         
         return frame
     
-    def draw_projected_ball(
+    def draw_projected_ball_and_collect_data(
         self,
         frame: np.ndarray,
-        ball_detection: Ball,
+        projected_ball: Ball,
         homography_matrix: np.ndarray,
-        
+        data_analytics: PlayerAnalytics = None,
     ) -> np.ndarray:
         """
         Project and draw ball
         """
         
         projected_ball = self.project_ball(
-            ball=ball_detection,
+            ball=projected_ball,
             homography_matrix=homography_matrix,
         )
+
+        if data_analytics is not None:
+            shifted_projected_player_pos = self.court_keypoints.shift_point_origin(
+                point=projected_ball.projection,
+                dimension="meters",
+            )
+            #TODO: move this
+            data_analytics.set_ball_position(
+                position=shifted_projected_player_pos,
+            )
 
         return projected_ball.draw_projection(frame)
 
@@ -654,9 +664,9 @@ class ProjectedCourt:
             print("projected_court: Missing data for players projection")
 
         if self.H is not None and ball:
-            output_frame = self.draw_projected_ball(
+            output_frame = self.draw_projected_ball_and_collect_data(
                 output_frame,
-                ball_detection=ball,
+                projected_ball=ball,
                 homography_matrix=self.H,
             )
         else:
