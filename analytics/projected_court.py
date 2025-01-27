@@ -1,3 +1,4 @@
+from copy import deepcopy
 from typing import Literal, Optional
 from dataclasses import dataclass
 import cv2
@@ -106,18 +107,16 @@ class ProjectedCourtKeypoints:
         self, 
         number_keypoints: Literal[12, 18, 22],
     ) -> list[Keypoint]:
-        
         keypoints_12 = [
-            Keypoint(id=i, xy=tuple(float(p) for p in v))
+            Keypoint(id=i, xy=v)
             for i, (k, v) in enumerate(self.__dict__.items())
             if "k" in k
         ]
 
+        extra_keypoints = []
         assert len(keypoints_12) == 12
     
-        if number_keypoints == 12:
-            return keypoints_12
-        elif number_keypoints == 18:
+        if number_keypoints == 18:
             extra_keypoints = [
                 self.__getitem__("k1"),
                 self.__getitem__("k2"),
@@ -145,10 +144,10 @@ class ProjectedCourtKeypoints:
         return keypoints_total
     
     def __getitem__(self, k: str) -> Keypoint:
-        id = int(k.replace("k", "")) - 1
+        idx = int(k.replace("k", "")) - 1
         return Keypoint(
-            id=id,
-            xy=tuple(float(p) for p in self.__dict__[k]),
+            id=idx,
+            xy=self.__dict__[k],
         )
 
     def lines(self) -> list[tuple[PointPixels, PointPixels]]:
@@ -177,23 +176,23 @@ class ProjectedCourtKeypoints:
         are converted from pixels to meters
         """
 
-        shifted_point = [
+        shifted_point = (
             float(point[0] - self.origin[0]),
             float(point[1] - self.origin[1]),
-        ]
+        )
 
         if dimension == "meters":
-            shifted_point = [
+            shifted_point = (
                 convert_pixel_distance_to_meters(
                     pixel_distance=p,
                     reference_in_meters=BASE_LINE,
                     reference_in_pixels=self.width,
                 )
                 for p in shifted_point
-            ]
+            )
 
-        return tuple(shifted_point)
-    
+        return shifted_point
+
 
 class ProjectedCourt:
 
@@ -264,7 +263,7 @@ class ProjectedCourt:
     def _set_projected_court_keypoints(self) -> None:
 
         """
-        Set the projeted court 12 points of interest
+        Set the projected court 12 points of interest
         """
 
         service_line_height = convert_meters_to_pixel_distance(
@@ -347,7 +346,7 @@ class ProjectedCourt:
     def draw_projected_court_single_frame(self, frame: np.ndarray) -> np.ndarray:
 
         """
-        Draw minicourt points of interest and lines 
+        Draw mini court points of interest and lines
         """
 
         for k, v in self.court_keypoints.__dict__.items():
@@ -464,16 +463,16 @@ class ProjectedCourt:
         H, _ = cv2.findHomography(src_points, dst_points)
 
         return H
-    
+
     def project_point(
         self,
         point: tuple[int, int],
         homography_matrix: np.ndarray,
     ) -> tuple[float, float]:
-        
+
         """
         Project point given a homography matrix H.
-        
+
         Parameters:
             point: point to be projected
             homography_matrix: homography matrix that projects into the court 2d plane
@@ -494,11 +493,11 @@ class ProjectedCourt:
         dst_point = np.matmul(homography_matrix, src_point)
         dst_point = dst_point / dst_point[2]
 
-        return (dst_point[0], dst_point[1])
-    
+        return dst_point[0], dst_point[1]
+
     def project_player(
         self, 
-        player_detection: Player,
+        player: Player,
         homography_matrix: np.ndarray,
     ) -> Player:
         """
@@ -506,17 +505,18 @@ class ProjectedCourt:
         """
         
         projected_point = self.project_point(
-            point=player_detection.feet,
+            point=player.feet,
             homography_matrix=homography_matrix,
         )
 
-        player_detection.projection = tuple(int(v) for v in projected_point)
+        projected_player = deepcopy(player)
+        projected_player.projection = projected_point
 
-        return player_detection 
+        return projected_player
     
     def project_ball(
         self, 
-        ball_detection: Ball,
+        ball: Ball,
         homography_matrix: np.ndarray,
     ) -> Ball:
         
@@ -525,18 +525,19 @@ class ProjectedCourt:
         """
         
         projected_point = self.project_point(
-            point=ball_detection.asint(),
+            point=ball.asint(),
             homography_matrix=homography_matrix,
         )
 
-        ball_detection.projection = tuple(int(v) for v in projected_point)
+        projected_ball = deepcopy(ball)
+        projected_ball.projection = projected_point
 
-        return ball_detection
+        return projected_ball
 
     def draw_projected_player_and_collect_data(
         self, 
         frame: np.ndarray,
-        player_detection: Player,
+        player: Player,
         homography_matrix: np.ndarray,
         data_analytics: PlayerAnalytics = None,
     ) -> np.ndarray:
@@ -545,15 +546,16 @@ class ProjectedCourt:
         """
         
         projected_player = self.project_player(
-            player_detection=player_detection,
+            player=player,
             homography_matrix=homography_matrix,  
         )
 
         if data_analytics is not None:
             shifted_projected_player_pos = self.court_keypoints.shift_point_origin(
-                point=tuple(float(v) for v in projected_player.projection),
+                point=projected_player.projection,
                 dimension="meters",
             )
+            #TODO: move this
             data_analytics.add_player_position(
                 id=projected_player.id,
                 position=shifted_projected_player_pos,
@@ -564,7 +566,7 @@ class ProjectedCourt:
     def draw_projected_players_and_collect_data(
         self,
         frame: np.ndarray,
-        players_detection: list[Player],
+        players: Players,
         homography_matrix: np.ndarray,
         data_analytics: PlayerAnalytics = None,  
     ) -> np.ndarray:
@@ -572,10 +574,10 @@ class ProjectedCourt:
         Project and draw players
         """
         
-        for player_detection in players_detection:
+        for player_detection in players:
             frame = self.draw_projected_player_and_collect_data(
                 frame=frame,
-                player_detection=player_detection,
+                player=player_detection,
                 homography_matrix=homography_matrix,
                 data_analytics=data_analytics,
             )
@@ -594,7 +596,7 @@ class ProjectedCourt:
         """
         
         projected_ball = self.project_ball(
-            ball_detection=ball_detection,
+            ball=ball_detection,
             homography_matrix=homography_matrix,
         )
 
@@ -604,8 +606,8 @@ class ProjectedCourt:
         self, 
         frame: np.ndarray,
         keypoints_detection: Keypoints,
-        players_detection: Optional[Players],
-        ball_detection: Optional[Ball],
+        players: Optional[Players],
+        ball: Optional[Ball],
         data_analytics: Optional[PlayerAnalytics] = None,
         is_fixed_keypoints: bool = False,
     ) -> tuple[np.ndarray, PlayerAnalytics]:
@@ -616,8 +618,8 @@ class ProjectedCourt:
         Parameters:
             frame: video frame 
             keypoints_detection: court keypoints detection
-            players_detection: players bounding box detection
-            ball_detection: ball position 
+            players: players bounding box detection
+            ball: ball position
             data_analytics: instance for data collection
             is_fixed_keypoints: True if the keypoints detection is fixed
         """
@@ -631,7 +633,7 @@ class ProjectedCourt:
                 self.H = self.homography_matrix(keypoints_detection)
                 print("projected_court: Done.")
         else:
-            if not(is_fixed_keypoints):
+            if not is_fixed_keypoints:
                 if keypoints_detection:
                     print("projected_court: Homography matrix calculation ...")
                     self.H = self.homography_matrix(keypoints_detection)
@@ -641,20 +643,20 @@ class ProjectedCourt:
                     print("projected_court: Missing keypoints for homography calculation")
                     self.H = None
 
-        if self.H is not None and players_detection:
+        if self.H is not None and players is not None:
             output_frame = self.draw_projected_players_and_collect_data(
                 output_frame, 
-                players_detection=players_detection,
+                players=players,
                 homography_matrix=self.H,
                 data_analytics=data_analytics,
             )
         else:
             print("projected_court: Missing data for players projection")
 
-        if self.H is not None and ball_detection:
+        if self.H is not None and ball:
             output_frame = self.draw_projected_ball(
                 output_frame,
-                ball_detection=ball_detection,
+                ball_detection=ball,
                 homography_matrix=self.H,
             )
         else:

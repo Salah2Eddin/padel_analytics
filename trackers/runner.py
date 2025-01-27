@@ -148,8 +148,8 @@ class TrackingRunner:
             output_frame, self.data_analytics = self.projected_court.draw_projections_and_collect_data(
                 frame_rgb,
                 keypoints_detection=keypoints_detection,
-                players_detection=players_detection,
-                ball_detection=ball_detection,
+                players=players_detection,
+                ball=ball_detection,
                 data_analytics=self.data_analytics,
                 is_fixed_keypoints=self.is_fixed_keypoints,
             )
