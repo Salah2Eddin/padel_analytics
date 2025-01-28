@@ -473,12 +473,11 @@ class ProjectedCourt:
 
     def point_pixel_distance_to_meters(self, point: tuple[int, int]) -> tuple[float, float]:
         """
-
+        Converts pixel position to meters
         Args:
-            point:
-
+            point: position of point in pixels
         Returns:
-
+            position of point in meters
         """
 
         mx = convert_pixel_distance_to_meters(
