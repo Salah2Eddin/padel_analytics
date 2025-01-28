@@ -356,6 +356,17 @@ class ProjectedCourt:
         Draw mini court points of interest and lines
         """
 
+        for line in self.court_keypoints.lines():
+            start_point = line[0]
+            end_point = line[1]
+            cv2.line(
+                frame,
+                start_point,
+                end_point,
+                (0, 0, 0),
+                2,
+            )
+
         for k, v in self.court_keypoints.__dict__.items():
             if "k" in k:
                 cv2.circle(
@@ -373,17 +384,6 @@ class ProjectedCourt:
                     (0, 255, 0),
                     -1,
                 )
-
-        for line in self.court_keypoints.lines():
-            start_point = line[0]
-            end_point = line[1]
-            cv2.line(
-                frame,
-                start_point,
-                end_point,
-                (0, 0, 0),
-                2,
-            )
 
         return frame
 
