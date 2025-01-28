@@ -277,6 +277,8 @@ class PlayerAnalytics:
         # Time in seconds between each frame for a given frame interval
         df[f"delta_time"] = df["time"].diff()
 
+        df.ffill()
+
         for player_id in player_ids:
             for pos in ("x", "y"):
                 # Displacement in x and y for each of the players
@@ -345,4 +347,18 @@ class PlayerAnalytics:
         df[f"ball_Anorm"] = np.sqrt(
             df[f"ball_Ax"] ** 2 + df[f"ball_Ay"] ** 2
         )
+
+        # Calculate ball direction
+        df["ball_direction"] = 180 + np.arctan2(df["ball_deltay"], df["ball_deltax"]) / np.pi * 180
+
+        # 1 if bounce
+        dir_y = df.shift(1)["ball_direction"] // 90
+
+        dir_x = df["ball_direction"] // 90
+        dir_x_pos = (df["ball_direction"] + 10) // 90
+        dir_x_neg = (df["ball_direction"] - 10) // 90
+
+        df["ball_bounce"] = np.where(((abs(dir_y - dir_x_pos) == abs(dir_y - dir_x_neg)) & (abs(dir_y - dir_x) != 0)),
+                                     "1", "")
+
         return df
