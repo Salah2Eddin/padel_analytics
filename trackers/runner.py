@@ -2,19 +2,20 @@
 Implementation of a runner to extract results from an arbitrary list of trackers 
 """
 
-from typing import Optional
-from tqdm import tqdm
 import timeit
 from copy import deepcopy
 from pathlib import Path
+from typing import Optional
+
 import cv2
 import supervision as sv
+from tqdm import tqdm
 
-from trackers.players_tracker.players_tracker import Players
+from analytics import ProjectedCourt, DataAnalytics
 from trackers.ball_tracker.ball_tracker import Ball
 from trackers.keypoints_tracker.keypoints_tracker import Keypoints
+from trackers.players_tracker.players_tracker import Players
 from trackers.tracker import Tracker
-from analytics import ProjectedCourt, DataAnalytics
 
 
 class TrackingRunner:
