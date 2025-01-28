@@ -14,11 +14,10 @@ from trackers.players_tracker.players_tracker import Players
 from trackers.ball_tracker.ball_tracker import Ball
 from trackers.keypoints_tracker.keypoints_tracker import Keypoints
 from trackers.tracker import Tracker
-from analytics import ProjectedCourt, PlayerAnalytics
+from analytics import ProjectedCourt, DataAnalytics
 
 
 class TrackingRunner:
-
     """
     Abstraction that implements a memory efficient pipeline to run
     a sequence of trackers over a sequence of video frames
@@ -35,15 +34,15 @@ class TrackingRunner:
     """
 
     def __init__(
-        self, 
-        trackers: list[Tracker],
-        video_path: str | Path,
-        inference_path: str | Path,
-        start: int = 0,
-        end: Optional[int] = None,
-        collect_data: bool = False, 
+            self,
+            trackers: list[Tracker],
+            video_path: str | Path,
+            inference_path: str | Path,
+            start: int = 0,
+            end: Optional[int] = None,
+            collect_data: bool = False,
     ) -> None:
-    
+
         self.video_path = video_path
         self.inference_path = inference_path
         self.start = start
@@ -62,29 +61,29 @@ class TrackingRunner:
             self.trackers[str(tracker)] = tracker.video_info_post_init(self.video_info)
 
             if tracker.object() == Keypoints:
-                self.is_fixed_keypoints = not(
-                    tracker.fixed_keypoints_detection is None
+                self.is_fixed_keypoints = not (
+                        tracker.fixed_keypoints_detection is None
                 )
-        
+
         if self.is_fixed_keypoints:
-            print("-"*40)
+            print("-" * 40)
             print("runner: Using fixed court keypoints")
-            print("-"*40)
+            print("-" * 40)
 
         self.projected_court = ProjectedCourt(self.video_info)
         if collect_data:
             print("runner: Ready for data collection")
-            self.data_analytics = PlayerAnalytics()
+            self.data_analytics = DataAnalytics()
         else:
             self.data_analytics = None
-    
+
     def restart(self) -> None:
         """
         Restart all trackers and data
         """
         for tracker in self.trackers.values():
             tracker.restart()
-        
+
         if self.data_analytics:
             self.data_analytics.restart()
 
@@ -112,7 +111,7 @@ class TrackingRunner:
         )
 
         for frame_index, frame in tqdm(enumerate(frame_generator)):
-    
+
             frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
             cv2.putText(
@@ -129,13 +128,13 @@ class TrackingRunner:
             ball_detection = None
             keypoints_detection = None
             for tracker in self.trackers.values():
-                
+
                 try:
                     prediction = tracker.results[frame_index]
                 except IndexError as e:
                     print(f"runner: {str(tracker)} frame {frame_index}")
-                    raise(e)
-                
+                    raise (e)
+
                 frame_rgb = prediction.draw(frame_rgb, **tracker.draw_kwargs())
 
                 if tracker.object() == Players:
@@ -144,7 +143,7 @@ class TrackingRunner:
                     ball_detection = deepcopy(prediction)
                 elif tracker.object() == Keypoints:
                     keypoints_detection = deepcopy(prediction)
-               
+
             output_frame, self.data_analytics = self.projected_court.draw_projections_and_collect_data(
                 frame_rgb,
                 keypoints_detection=keypoints_detection,
@@ -160,7 +159,7 @@ class TrackingRunner:
                 self.data_analytics.step(1)
 
             out.write(cv2.cvtColor(output_frame, cv2.COLOR_BGR2RGB))
-        
+
         out.release()
 
         # Remove extra frame
@@ -169,8 +168,7 @@ class TrackingRunner:
         # assertion_txt = f"lenght data analytics: {len(self.data_analytics)} / total frames {self.total_frames}"
         # assert len(self.data_analytics) == self.total_frames, assertion_txt
 
-        print("runner: Done.") 
-
+        print("runner: Done.")
 
     def run(self) -> None:
         """
@@ -186,21 +184,19 @@ class TrackingRunner:
 
             if len(tracker) != 0:
                 print(f"{tracker.__str__()}: {len(tracker)} predictions stored")
-                
 
                 continue
 
                 """ FIX TOTAL FRAMES / TOTAL PREDICTIONS MISMATCH """
 
-
-                #if len(tracker) == self.total_frames:
+                # if len(tracker) == self.total_frames:
                 #    print(
                 #        f"""{tracker.__str__()}: \
                 #        match between number of predictions and total frames 
                 #        """
                 #    )
                 #    continue
-                #else:
+                # else:
                 #    print(
                 #        f"""{tracker.__str__()}: \
                 #        unmatch between number of predictions and total frames 
@@ -222,7 +218,7 @@ class TrackingRunner:
             t0 = timeit.default_timer()
             # Collect all objects predictions for a given video
             tracker.predict_and_update(
-                frame_generator, 
+                frame_generator,
                 total_frames=self.total_frames,
             )
             t1 = timeit.default_timer()
@@ -232,21 +228,5 @@ class TrackingRunner:
             print(f"{str(tracker)}: {t1 - t0} inference time.")
 
             tracker.save_predictions()
-        
+
         self.draw_and_collect_data()
-
-        
-
-    
-
-    
-
-
-        
-
-
-
-    
-    
-
-

@@ -3,9 +3,6 @@ from dataclasses import dataclass
 from copy import deepcopy
 import pandas as pd
 import numpy as np
-import functools
-
-from . import SIZE_MULTIPLIER, COURT_SIZE_M
 
 
 class InvalidDataPoint(Exception):
@@ -115,7 +112,7 @@ class FrameData:
         self.ball_position = ball_position
 
 
-class PlayerAnalytics:
+class DataAnalytics:
     """
     Tracker objects data collector 
     """

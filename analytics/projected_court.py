@@ -8,7 +8,7 @@ import supervision as sv
 from constants import BASE_LINE, SIDE_LINE, SERVICE_SIDE_LINE, NET_SIDE_LINE
 from utils import convert_meters_to_pixel_distance, convert_pixel_distance_to_meters
 from trackers import Player, Players, Keypoint, Keypoints, Ball
-from analytics.data_analytics import PlayerAnalytics
+from analytics.data_analytics import DataAnalytics
 
 from .import SIZE_MULTIPLIER
 
@@ -539,7 +539,7 @@ class ProjectedCourt:
         frame: np.ndarray,
         player: Player,
         homography_matrix: np.ndarray,
-        data_analytics: PlayerAnalytics = None,
+        data_analytics: DataAnalytics = None,
     ) -> np.ndarray:
         """
         Project and draw a single player
@@ -568,7 +568,7 @@ class ProjectedCourt:
         frame: np.ndarray,
         players: Players,
         homography_matrix: np.ndarray,
-        data_analytics: PlayerAnalytics = None,  
+        data_analytics: DataAnalytics = None,
     ) -> np.ndarray:
         """
         Project and draw players
@@ -589,7 +589,7 @@ class ProjectedCourt:
         frame: np.ndarray,
         projected_ball: Ball,
         homography_matrix: np.ndarray,
-        data_analytics: PlayerAnalytics = None,
+        data_analytics: DataAnalytics = None,
     ) -> np.ndarray:
         """
         Project and draw ball
@@ -618,9 +618,9 @@ class ProjectedCourt:
         keypoints_detection: Keypoints,
         players: Optional[Players],
         ball: Optional[Ball],
-        data_analytics: Optional[PlayerAnalytics] = None,
+        data_analytics: Optional[DataAnalytics] = None,
         is_fixed_keypoints: bool = False,
-    ) -> tuple[np.ndarray, PlayerAnalytics]:
+    ) -> tuple[np.ndarray, DataAnalytics]:
         """
         Project and draw court and objects of interest.
         Collect objects of interest data.
