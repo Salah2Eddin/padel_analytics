@@ -17,12 +17,12 @@ from trackers.ball_tracker.dataset import BallTrajectoryDataset
 from trackers.ball_tracker.iterable import BallTrajectoryIterable
 from trackers.ball_tracker.predict import predict, predict_modified
 from trackers.tracker import Object, Tracker, NoPredictSample
-
+from trackers.projection import Projection
 
 
 def get_model(
-    model_name: Literal["TrackNet", "InpaintNet"], 
-    seq_len: int = None, 
+    model_name: Literal["TrackNet", "InpaintNet"],
+    seq_len: int = None,
     bg_mode: Literal["", "subtract", "subtract_concat", "concat"] = None,
 ) -> torch.nn.Module:
     """ 
@@ -61,12 +61,12 @@ def get_model(
         model = InpaintNet()
     else:
         raise ValueError('Invalid model name.')
-    
+
     return model
 
 
 def get_ensemble_weight(
-    seq_len: int, 
+    seq_len: int,
     eval_mode: Literal["average", "weight"],
 ) -> torch.Tensor:
     """ 
@@ -93,7 +93,7 @@ def get_ensemble_weight(
         weight = weight / weight.sum()
     else:
         raise ValueError('Invalid mode')
-    
+
     return weight
 
 
@@ -132,7 +132,7 @@ def generate_inpaint_mask(pred_dict: dict, th_h: float=30) -> list:
             # ball is out of the field of camera view 
             pass
         i = j
-    
+
     return inpaint_mask.tolist()
 
 
@@ -149,11 +149,11 @@ class Ball(Object):
     """
 
     def __init__(
-        self, 
-        frame: int, 
-        xy: tuple[float, float], 
+        self,
+        frame: int,
+        xy: tuple[float, float],
         visibility: Literal[0,1],
-        projection: Optional[tuple[int, int]] = None                    
+        projection: Optional[Projection] = None
     ):
         super().__init__()
 
@@ -173,10 +173,10 @@ class Ball(Object):
             "visibility": self.visibility,
             "projection": self.projection,
         }
-    
+
     def asint(self) -> tuple[int, int]:
         return tuple(int(v) for v in self.xy)
-    
+
     def draw(self, frame: np.ndarray) -> np.ndarray:
         """
         Draw ball detection in a given frame
@@ -191,12 +191,12 @@ class Ball(Object):
         )
 
         return frame
-    
+
     def draw_projection(self, frame: np.ndarray) -> np.ndarray:
-        
+
         cv2.circle(
             frame,
-            tuple(int(x) for x in self.projection),
+            self.projection.asint(),
             6,
             (255, 255, 0),
             -1,
@@ -226,18 +226,18 @@ class BallTracker(Tracker):
 
     EVAL_MODE: str = "weight"
     TRAJECTORY_LENGTH: int = 8
-    
+
     HEIGHT: int = 288
     WIDTH: int = 512
     SIGMA: float = 2.5
     IMG_FORMAT = 'png'
-    
+
     def __init__(
-        self, 
+        self,
         tracking_model_path: str,
         inpainting_model_path: str,
         batch_size: int,
-        median_max_sample_num: int = 1800, 
+        median_max_sample_num: int = 1800,
         median: Optional[np.ndarray] = None,
         load_path: Optional[str | Path] = None,
         save_path: Optional[str | Path] = None,
@@ -258,7 +258,7 @@ class BallTracker(Tracker):
         self.bg_mode = tracknet_ckpt['param_dict']['bg_mode']
 
         self.tracknet = get_model(
-            "TrackNet", 
+            "TrackNet",
             self.tracknet_seq_len,
             self.bg_mode,
         )
@@ -276,26 +276,26 @@ class BallTracker(Tracker):
         self.batch_size = batch_size
         self.median_max_sample_num = median_max_sample_num
         self.median = median
-    
+
     def video_info_post_init(self, video_info: sv.VideoInfo) -> "BallTracker":
         self.video_info = video_info
         return self
-    
+
     def object(self) -> Type[Object]:
         return Ball
-    
+
     def draw_kwargs(self) -> dict:
         return {}
-    
+
     def __str__(self) -> str:
         return "ball_tracker"
-    
+
     def restart(self) -> None:
         self.results.restart()
 
     def processor(self, frame: np.ndarray):
         pass
-    
+
     def draw_traj(self, img, traj, radius=3, color='red') -> np.ndarray:
         """ Draw trajectory on the image.
 
@@ -308,7 +308,7 @@ class BallTracker(Tracker):
         """
         # img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)   
         img = Image.fromarray(img)
-        
+
         for i in range(len(traj)):
             if traj[i] is not None:
                 draw_x = traj[i][0]
@@ -320,7 +320,7 @@ class BallTracker(Tracker):
         # img =  cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
 
         return np.array(img)
-    
+
     def draw_multiple_frames(
         self,
         frames: list[np.ndarray],
@@ -329,14 +329,14 @@ class BallTracker(Tracker):
     ):
 
         pred_queue = deque()
-        
+
         output_frames = []
         for frame, ball_detection in zip(frames, ball_detections):
-        
+
             # Check capacity of queue
             if len(pred_queue) >= traj_len:
                 pred_queue.pop()
-        
+
             pred_queue.appendleft(
                 list(ball_detection.xy)
             ) if ball_detection.visibility else pred_queue.appendleft(None)
@@ -345,7 +345,7 @@ class BallTracker(Tracker):
             output_frames.append(self.draw_traj(frame, pred_queue, color='yellow'))
 
         return output_frames
-    
+
     def modify_pred_dict(self, pred_dict: dict):
 
         mapping = {
@@ -361,7 +361,7 @@ class BallTracker(Tracker):
             k: pred_dict[v]
             for k, v in mapping.items()
         }
-    
+
     def to(self, device: str) -> None:
         self.tracknet.to(device)
         if self.inpaintnet is not None:
@@ -377,19 +377,19 @@ class BallTracker(Tracker):
     ) -> list[Ball]:
 
         w_scaler, h_scaler = (
-            self.video_info.width / self.WIDTH, 
+            self.video_info.width / self.WIDTH,
             self.video_info.height / self.HEIGHT,
         )
 
         img_scaler = (w_scaler, h_scaler)
 
         tracknet_pred_dict = {
-            'frame':[], 
-            'x':[], 
-            'y':[], 
-            'visibility':[], 
+            'frame':[],
+            'x':[],
+            'y':[],
+            'visibility':[],
             'inpaint_mask': [],
-            'img_scaler': img_scaler, 
+            'img_scaler': img_scaler,
             'img_shape': (self.video_info.width, self.video_info.height),
         }
 
@@ -426,11 +426,11 @@ class BallTracker(Tracker):
         frame_indices = torch.arange(seq_len-1, -1, -1) # [7, 6, 5, 4, 3, 2, 1, 0]
         y_pred_buffer = torch.zeros(
             (
-                buffer_size, 
-                seq_len, 
-                self.HEIGHT, 
+                buffer_size,
+                seq_len,
+                self.HEIGHT,
                 self.WIDTH
-            ), 
+            ),
             dtype=torch.float32,
         )
         # Weights for the frame prediction ensemble along the distinct samples position
@@ -440,19 +440,19 @@ class BallTracker(Tracker):
             x = x.float().to(self.DEVICE)
 
             batch_size = x.shape[0]
-            assert seq_len*3 + 3 == x.shape[1] 
+            assert seq_len*3 + 3 == x.shape[1]
 
             with torch.no_grad():
                 y_pred = self.tracknet(x).detach().cpu()
-            
+
             # Concatenate predictions onto the previous predictions buffer
             y_pred_buffer = torch.cat(
-                (y_pred_buffer, y_pred), 
+                (y_pred_buffer, y_pred),
                 dim=0,
             )
 
             ensemble_y_pred = torch.empty(
-                (0, 1, self.HEIGHT, self.WIDTH), 
+                (0, 1, self.HEIGHT, self.WIDTH),
                 dtype=torch.float32,
             )
 
@@ -476,7 +476,7 @@ class BallTracker(Tracker):
 
                 ensemble_y_pred = torch.cat(
                     (
-                        ensemble_y_pred, 
+                        ensemble_y_pred,
                         y_pred.reshape(1, 1, self.HEIGHT, self.WIDTH),
                     ),
                     dim=0,
@@ -502,7 +502,7 @@ class BallTracker(Tracker):
 
                         ensemble_y_pred = torch.cat(
                             (
-                                ensemble_y_pred, 
+                                ensemble_y_pred,
                                 y_pred.reshape(1, 1, self.HEIGHT, self.WIDTH),
                             ),
                             dim=0,
@@ -529,17 +529,17 @@ class BallTracker(Tracker):
                 tracknet_pred_dict, th_h=self.video_info.height*0.05,
             )
             inpaint_pred_dict = {
-                'Frame':[], 
-                'X':[], 
-                'Y':[], 
+                'Frame':[],
+                'X':[],
+                'Y':[],
                 'Visibility':[],
             }
 
             # Create dataset with overlap sampling for temporal ensemble
             dataset = BallTrajectoryDataset(
-                seq_len=seq_len, 
-                sliding_step=1, 
-                data_mode='coordinate', 
+                seq_len=seq_len,
+                sliding_step=1,
+                data_mode='coordinate',
                 pred_dict=self.modify_pred_dict(tracknet_pred_dict),
                 HEIGHT=self.HEIGHT,
                 WIDTH=self.WIDTH,
@@ -547,21 +547,21 @@ class BallTracker(Tracker):
                 IMG_FORMAT=self.IMG_FORMAT,
             )
             data_loader = DataLoader(
-                dataset, 
-                batch_size=self.batch_size, 
-                shuffle=False, 
+                dataset,
+                batch_size=self.batch_size,
+                shuffle=False,
                 drop_last=False,
-            ) # num_workers=num_workers, 
+            ) # num_workers=num_workers,
 
             weight = get_ensemble_weight(seq_len, self.EVAL_MODE)
 
             # Init buffer params
             num_sample, sample_count = len(dataset), 0
             buffer_size = seq_len - 1
-            sample_indices = torch.arange(seq_len) 
-            frame_indices = torch.arange(seq_len-1, -1, -1) 
+            sample_indices = torch.arange(seq_len)
+            frame_indices = torch.arange(seq_len-1, -1, -1)
             coor_inpaint_buffer = torch.zeros(
-                (buffer_size, seq_len, 2), 
+                (buffer_size, seq_len, 2),
                 dtype=torch.float32,
             )
 
@@ -570,16 +570,16 @@ class BallTracker(Tracker):
                 batch_size = i.shape[0]
                 with torch.no_grad():
                     coor_inpaint = self.inpaintnet(
-                        coor_pred.cuda(), 
+                        coor_pred.cuda(),
                         inpaint_mask.cuda(),
                     ).detach().cpu()
-                    
+
                     coor_inpaint = coor_inpaint * inpaint_mask + coor_pred * (1-inpaint_mask)
-                
+
                 # Thresholding
                 th_mask = (
                     (
-                        (coor_inpaint[:, :, 0] < self.COOR_TH) 
+                        (coor_inpaint[:, :, 0] < self.COOR_TH)
                         &
                         (coor_inpaint[:, :, 1] < self.COOR_TH)
                     )
@@ -591,19 +591,19 @@ class BallTracker(Tracker):
                     dim=0,
                 )
                 ensemble_i = torch.empty(
-                    (0, 1, 2), 
+                    (0, 1, 2),
                     dtype=torch.float32,
                 )
                 ensemble_coor_inpaint = torch.empty(
-                    (0, 1, 2), 
+                    (0, 1, 2),
                     dtype=torch.float32,
                 )
-                
+
                 for sample_i in range(batch_size):
                     if sample_count < buffer_size:
                         # Imcomplete buffer
                         coor_inpaint = coor_inpaint_buffer[
-                            sample_indices + sample_i, 
+                            sample_indices + sample_i,
                             frame_indices,
                         ].sum(0)
                         coor_inpaint /= (sample_count+1)
@@ -611,17 +611,17 @@ class BallTracker(Tracker):
                         # General case
                         coor_inpaint = (
                             coor_inpaint_buffer[
-                                sample_indices + sample_i, 
+                                sample_indices + sample_i,
                                 frame_indices,
                             ] * weight[:, None]
                         ).sum(0)
-                    
+
                     ensemble_i = torch.cat(
-                        (ensemble_i, i[sample_i][0].view(1, 1, 2)), 
+                        (ensemble_i, i[sample_i][0].view(1, 1, 2)),
                         dim=0,
                     )
                     ensemble_coor_inpaint = torch.cat(
-                        (ensemble_coor_inpaint, coor_inpaint.view(1, 1, 2)), 
+                        (ensemble_coor_inpaint, coor_inpaint.view(1, 1, 2)),
                         dim=0,
                     )
                     sample_count += 1
@@ -629,26 +629,26 @@ class BallTracker(Tracker):
                     if sample_count == num_sample:
                         # Last input sequence
                         coor_zero_pad = torch.zeros(
-                            (buffer_size, seq_len, 2), 
+                            (buffer_size, seq_len, 2),
                             dtype=torch.float32,
                         )
                         coor_inpaint_buffer = torch.cat(
-                            (coor_inpaint_buffer, coor_zero_pad), 
+                            (coor_inpaint_buffer, coor_zero_pad),
                             dim=0,
                         )
-                        
+
                         for frame_i in range(1, seq_len):
                             coor_inpaint = coor_inpaint_buffer[
-                                sample_indices + sample_i + frame_i, 
+                                sample_indices + sample_i + frame_i,
                                 frame_indices
                             ].sum(0)
                             coor_inpaint /= (seq_len - frame_i)
                             ensemble_i = torch.cat(
-                                (ensemble_i, i[-1][frame_i].view(1, 1, 2)), 
+                                (ensemble_i, i[-1][frame_i].view(1, 1, 2)),
                                 dim=0,
                             )
                             ensemble_coor_inpaint = torch.cat(
-                                (ensemble_coor_inpaint, coor_inpaint.view(1, 1, 2)), 
+                                (ensemble_coor_inpaint, coor_inpaint.view(1, 1, 2)),
                                 dim=0,
                             )
 
@@ -658,22 +658,22 @@ class BallTracker(Tracker):
 
                 # Predict
                 tmp_pred = predict(
-                    ensemble_i, 
+                    ensemble_i,
                     c_pred=ensemble_coor_inpaint,
-                    img_scaler=img_scaler, 
-                    WIDTH=self.WIDTH, 
+                    img_scaler=img_scaler,
+                    WIDTH=self.WIDTH,
                     HEIGHT=self.HEIGHT,
                 )
 
                 {'Frame':[], 'X':[], 'Y':[], 'Visibility':[]}
                 for key in tmp_pred.keys():
                     inpaint_pred_dict[key].extend(tmp_pred[key])
-                
+
                 # Update buffer, keep last predictions for ensemble in next iteration
                 coor_inpaint_buffer = coor_inpaint_buffer[-buffer_size:]
 
         pred_dict = inpaint_pred_dict if self.inpaintnet is not None else tracknet_pred_dict
-        
+
         ball_detections = []
         for frame_counter in range(video_len):
             if frame_counter in pred_dict["Frame"]:
@@ -704,9 +704,8 @@ class BallTracker(Tracker):
         #                 visibility=pred_dict["Visibility"][i]
         #             )
         #         )
-            
+
         return ball_detections
 
-        
 
-            
+

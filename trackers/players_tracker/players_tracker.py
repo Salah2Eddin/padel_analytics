@@ -9,7 +9,7 @@ import supervision as sv
 
 from utils import converters
 from trackers.tracker import Object, Tracker, NoPredictFrames
-
+from trackers.projection import Projection
 
 class Player:
 
@@ -22,64 +22,64 @@ class Player:
     """
 
     def __init__(
-        self, 
-        detection: sv.Detections, 
-        projection: Optional[tuple[int, int]] = None,
+        self,
+        detection: sv.Detections,
+        projection: Optional[Projection] = None,
     ):
         self.detection = detection
         self.projection = projection
         self.xyxy = detection.xyxy[0]
         self.id = (
-            int(detection.tracker_id[0]) 
-            if detection.tracker_id 
+            int(detection.tracker_id[0])
+            if detection.tracker_id
             else None
         )
         self.class_id = int(detection.class_id[0])
         self.confidence = float(detection.confidence[0])
-       
+
     @property
     def top_left(self) -> tuple[int, int]:
         return tuple(
             int(p)
             for p in self.xyxy[:2]
         )
-    
+
     @property
     def bottom_right(self) -> tuple[int, int]:
         return tuple(
             int(p)
             for p in self.xyxy[2:]
         )
-    
+
     @property
     def height(self) -> float:
         return self.bottom_right[1] - self.top_left[1]
-    
+
     @property
     def width(self) -> float:
         return self.bottom_right[0] - self.top_left[0]
-    
+
     @property
     def midpoint(self) -> tuple[int, int]:
         return (
             int(self.top_left[0] + self.width / 2),
             int(self.top_left[1] + self.height / 2),
         )
-    
+
     @property
     def feet(self) -> tuple[int, int]:
         return (
             int(self.top_left[0] + self.width / 2),
             int(self.bottom_right[1]),
         )
-    
+
     @classmethod
     def from_json(cls, x: dict):
         try:
             projection = x["projection"]
         except KeyError:
             projection = None
-            
+
         detection = sv.Detections(
             xyxy=np.array([x["xyxy"]]),
             confidence=np.array([x["confidence"]]),
@@ -98,8 +98,8 @@ class Player:
         }
 
     def draw(
-        self, 
-        frame: np.ndarray, 
+        self,
+        frame: np.ndarray,
         video_info: sv.VideoInfo,
         annotator: Literal[
             "rectangle_bounding_box",
@@ -133,7 +133,7 @@ class Player:
         }
 
         box_annotator = annotators[annotator](
-            thickness=thickness, 
+            thickness=thickness,
             color=sv.Color.BLUE,
         )
 
@@ -145,7 +145,7 @@ class Player:
         )
 
         annotated_frame = cv2.cvtColor(
-            frame, 
+            frame,
             cv2.COLOR_RGB2BGR,
         ).copy()
 
@@ -157,34 +157,31 @@ class Player:
             scene=annotated_frame,
             detections=self.detection,
             labels=[
-                f"{self.id}: {self.confidence:.2f}" 
-                if show_confidence 
+                f"{self.id}: {self.confidence:.2f}"
+                if show_confidence
                 else f"{self.id}"
             ]
         )
 
         return cv2.cvtColor(
-            annotated_frame, 
+            annotated_frame,
             cv2.COLOR_BGR2RGB,
         )
-    
+
     def draw_projection(self, frame: np.ndarray) -> np.ndarray:
         if self.projection:
             cv2.circle(
                 frame,
-                tuple(int(x) for x in self.projection),
+                self.projection.asint(),
                 8,
                 (0, 0, 255),
                 -1,
             )
 
             cv2.putText(
-                frame, 
+                frame,
                 str(self.id),
-                (
-                    int(self.projection[0]),
-                    int(self.projection[1]) - 10,
-                ),
+                self.projection.shift((0, -10)).asint(),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.9,
                 (0, 0, 255),
@@ -194,7 +191,7 @@ class Player:
             return frame
         else:
             raise ValueError("Inexistent projection.")
-    
+
 
 class Players(Object):
 
@@ -226,13 +223,13 @@ class Players(Object):
 
     def __iter__(self) -> Iterable[Player]:
         return (player for player in self.players)
-    
+
     def __getitem__(self, i: int) -> Player:
         return self.players[i]
-    
+
     def draw(
-        self, 
-        frame: np.ndarray, 
+        self,
+        frame: np.ndarray,
         video_info: sv.VideoInfo,
         annotator: Literal[
             "rectangle_bounding_box",
@@ -251,12 +248,12 @@ class Players(Object):
             annotator: bounding box style
             show_confidence: True to write detection confidence
         """
-    
+
         for player in self.players:
             frame = player.draw(
-                frame, 
-                video_info, 
-                annotator, 
+                frame,
+                video_info,
+                annotator,
                 show_confidence,
             )
 
@@ -266,7 +263,7 @@ class Players(Object):
 class PlayerTracker(Tracker):
 
     """
-    Tracker of players object
+    Tracker of player object
 
     Attributes:
         model_path: yolo model path
@@ -282,7 +279,7 @@ class PlayerTracker(Tracker):
     IMGSZ = 640
 
     def __init__(
-        self, 
+        self,
         model_path: str,
         polygon_zone: sv.PolygonZone,
         batch_size: int,
@@ -321,10 +318,10 @@ class PlayerTracker(Tracker):
             "annotator": self.annotator,
             "show_confidence": self.show_confidence,
         }
-    
+
     def __str__(self) -> str:
         return "players_tracker"
-    
+
     def restart(self) -> None:
         """
         Reset the tracking results
@@ -335,7 +332,7 @@ class PlayerTracker(Tracker):
 
     def processor(self, frame: np.ndarray) -> np.ndarray:
         return cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    
+
     def to(self, device: str) -> None:
         self.model.to(device)
 
@@ -350,7 +347,7 @@ class PlayerTracker(Tracker):
         ]
 
         results = self.model.predict(
-            sample, 
+            sample,
             conf=self.CONF,
             iou=self.IOU,
             imgsz=self.IMGSZ,
@@ -379,7 +376,6 @@ class PlayerTracker(Tracker):
             )
 
         return predictions
-    
+
     def predict_frames(self, frame_generator: Iterable[np.ndarray], **kwargs):
         raise NoPredictFrames()
-        
