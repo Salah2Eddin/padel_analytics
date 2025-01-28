@@ -172,7 +172,7 @@ class Player:
         if self.projection:
             cv2.circle(
                 frame,
-                self.projection,
+                tuple(int(x) for x in self.projection),
                 8,
                 (0, 0, 255),
                 -1,
@@ -182,8 +182,8 @@ class Player:
                 frame, 
                 str(self.id),
                 (
-                    self.projection[0], 
-                    self.projection[1] - 10,
+                    int(self.projection[0]),
+                    int(self.projection[1]) - 10,
                 ),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.9,

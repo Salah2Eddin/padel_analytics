@@ -196,7 +196,7 @@ class Ball(Object):
         
         cv2.circle(
             frame,
-            self.projection,
+            tuple(int(x) for x in self.projection),
             6,
             (255, 255, 0),
             -1,
