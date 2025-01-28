@@ -182,7 +182,7 @@ class ProjectedCourtKeypoints:
         )
 
         if dimension == "meters":
-            shifted_point = (
+            shifted_point = tuple(
                 convert_pixel_distance_to_meters(
                     pixel_distance=p,
                     reference_in_meters=BASE_LINE,
@@ -601,13 +601,13 @@ class ProjectedCourt:
         )
 
         if data_analytics is not None:
-            shifted_projected_player_pos = self.court_keypoints.shift_point_origin(
+            shifted_projected_ball_pos = self.court_keypoints.shift_point_origin(
                 point=projected_ball.projection,
                 dimension="meters",
             )
             #TODO: move this
             data_analytics.set_ball_position(
-                position=shifted_projected_player_pos,
+                position=shifted_projected_ball_pos,
             )
 
         return projected_ball.draw_projection(frame)
@@ -668,6 +668,7 @@ class ProjectedCourt:
                 output_frame,
                 projected_ball=ball,
                 homography_matrix=self.H,
+                data_analytics=data_analytics
             )
         else:
             print("projected_court: Missing data for ball projection")
